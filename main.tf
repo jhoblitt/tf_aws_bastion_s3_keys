@@ -43,18 +43,41 @@ data "template_file" "user_data" {
   }
 }
 
+data "template_cloudinit_config" "config" {
+  gzip          = false
+  base64_encode = false
+
+  part {
+    content = <<EOF
+groups:
+  - ${var.ssh_user}
+users:
+  - name: ${var.ssh_user}
+    gecos: ${var.ssh_user} role user
+    primary-group: ${var.ssh_user}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: wheel
+    lock_passwd: true
+EOF
+  }
+
+  part {
+    content_type = "text/x-shellscript"
+    content      = "${data.template_file.user_data.rendered}"
+  }
+}
 
 resource "aws_launch_configuration" "bastion" {
-  name_prefix          = "${var.name}-"
-  image_id             = "${var.ami}"
-  instance_type        = "${var.instance_type}"
-  user_data            = "${data.template_file.user_data.rendered}"
+  name_prefix                 = "${var.name}-"
+  image_id                    = "${var.ami}"
+  instance_type               = "${var.instance_type}"
+  user_data                   = "${data.template_cloudinit_config.config.rendered}"
   security_groups      = [
     "${compact(concat(list(aws_security_group.bastion.id), split(",", "${var.security_group_ids}")))}"
   ]
-  iam_instance_profile = "${var.iam_instance_profile}"
+  iam_instance_profile        = "${var.iam_instance_profile}"
   associate_public_ip_address = "${var.associate_public_ip_address}"
-  key_name             = "${var.key_name}"
+  key_name                    = "${var.key_name}"
 
   lifecycle {
     create_before_destroy = true
